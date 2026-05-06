@@ -61,13 +61,14 @@ def load_apps() -> dict[str, Any]:
 
 
 def save_apps(apps: dict[str, Any]) -> None:
-    tmp = APPS_FILE.with_suffix(".tmp")
-    tmp.write_text(json.dumps(apps, indent=2))
-    tmp.replace(APPS_FILE)
+    APPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with open(APPS_FILE, "w") as f:
+        json.dump(apps, f, indent=2)
 
 
 def append_jsonl(path: Path, record: dict[str, Any]) -> None:
-    with path.open("a") as f:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a") as f:
         f.write(json.dumps(record) + "\n")
 
 
