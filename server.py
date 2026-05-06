@@ -36,7 +36,9 @@ from pathlib import Path
 from typing import Any
 
 STATE_DIR = Path(os.environ.get("STATE_DIR", "/var/lib/xnode-tpm-verify"))
-STATE_DIR.mkdir(parents=True, exist_ok=True)
+# Don't mkdir here — systemd's StateDirectory= handles creation. Calling
+# mkdir() on the symlinked target fails with FileExistsError even with
+# exist_ok=True because the target is a symlink, not a regular dir.
 APPS_FILE = STATE_DIR / "apps.json"
 ATTESTATIONS_FILE = STATE_DIR / "attestations.jsonl"
 RECEIPTS_FILE = STATE_DIR / "receipts.jsonl"
@@ -61,13 +63,11 @@ def load_apps() -> dict[str, Any]:
 
 
 def save_apps(apps: dict[str, Any]) -> None:
-    APPS_FILE.parent.mkdir(parents=True, exist_ok=True)
     with open(APPS_FILE, "w") as f:
         json.dump(apps, f, indent=2)
 
 
 def append_jsonl(path: Path, record: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "a") as f:
         f.write(json.dumps(record) + "\n")
 
