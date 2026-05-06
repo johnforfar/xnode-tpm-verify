@@ -8,6 +8,8 @@ in
 {
   environment.systemPackages = [ pkgs.python3 serverPy ];
 
+  systemd.tmpfiles.rules = [ "d /var/lib/xnode-tpm-verify 0755 root root -" ];
+
   systemd.services.xnode-tpm-verify = {
     description = "xnode-tpm-verify — TPM2 attestation verifier";
     wantedBy = [ "multi-user.target" ];
@@ -20,9 +22,7 @@ in
       StandardOutput = "journal";
       StandardError = "journal";
       Environment = [ "STATE_DIR=/var/lib/xnode-tpm-verify" "PORT=8080" ];
-      StateDirectory = "xnode-tpm-verify";
-      User = "xnode-tpm-verify";
-      DynamicUser = true;
+      User = "root";
     };
   };
 
