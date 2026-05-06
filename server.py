@@ -113,6 +113,26 @@ def find_receipt(receipt_id: str) -> dict[str, Any] | None:
     return None
 
 
+def find_attestation_for_receipt(receipt_id: str) -> dict[str, Any] | None:
+    """Look up the raw attestation log entry referenced by a receipt.
+    Used by /bundle/<id> to give third parties everything they need for
+    trustless verification without re-trusting the verifier."""
+    receipt = find_receipt(receipt_id)
+    if not receipt:
+        return None
+    body = receipt.get("body", {})
+    nonce = body.get("nonce_echoed")
+    app = body.get("app_name")
+    if not (nonce and app and ATTESTATIONS_FILE.exists()):
+        return None
+    with ATTESTATIONS_FILE.open() as f:
+        for line in f:
+            a = json.loads(line)
+            if a.get("app_name") == app and a.get("client_nonce") == nonce:
+                return a
+    return None
+
+
 def latest_receipt_for_app(app_name: str, kind: str | None = None) -> dict[str, Any] | None:
     if not RECEIPTS_FILE.exists():
         return None
@@ -348,6 +368,34 @@ class H(http.server.BaseHTTPRequestHandler):
                 self.send_json(404, {"error": "receipt not found"})
             return
 
+        if path.startswith("/bundle/"):
+            rid = path[len("/bundle/"):]
+            a = find_attestation_for_receipt(rid)
+            if not a:
+                self.send_json(404, {"error": "no attestation bundle for this receipt"})
+                return
+            self.send_json(200, {
+                "receipt_id": rid,
+                "for_app": a.get("app_name"),
+                "received_at": a.get("received_at"),
+                "client_nonce_hex": a.get("client_nonce"),
+                "quote_msg_b64": a.get("quote_msg_b64"),
+                "quote_sig_b64": a.get("quote_sig_b64"),
+                "ak_pub_pem": a.get("ak_pub_pem"),
+                "ek_cert_der_b64": a.get("ek_cert_der_b64"),
+                "live_pcrs": a.get("live_pcrs", {}),
+                "verify_yourself": [
+                    "1. base64 -d <<<\"$quote_msg_b64\" > quote.msg",
+                    "2. base64 -d <<<\"$quote_sig_b64\" > quote.sig",
+                    "3. printf '%s' \"$ak_pub_pem\" > ak.pub.pem",
+                    "4. openssl dgst -sha256 -verify ak.pub.pem -signature quote.sig quote.msg",
+                    "   # → 'Verified OK' means the AK actually signed this quote",
+                    "5. (optional) verify EK cert against silicon vendor's CA root",
+                    "   # see https://tsci.intel.com/content/OnDieCA/certs/ for Intel",
+                ],
+            })
+            return
+
         self.send_json(404, {"error": "no such endpoint"})
 
     def do_POST(self) -> None:
@@ -483,6 +531,12 @@ class H(http.server.BaseHTTPRequestHandler):
             "expected_pcrs": meta["expected_pcrs"],
             "mismatches": meta["mismatches"],
             "attest_parsed": attest,
+            # Raw artifacts retained so /bundle/<receipt_id> can serve them
+            # for fully-trustless third-party verification.
+            "quote_msg_b64": body.get("quote_msg_b64"),
+            "quote_sig_b64": body.get("quote_sig_b64"),
+            "ak_pub_pem": meta["ak_pem"],
+            "ek_cert_der_b64": body.get("ek_cert_der_b64"),
         }
         append_jsonl(ATTESTATIONS_FILE, record)
 
