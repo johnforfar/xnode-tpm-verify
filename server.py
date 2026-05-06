@@ -562,12 +562,25 @@ class H(http.server.BaseHTTPRequestHandler):
         verdict = "attested" if not meta["mismatches"] else "drift"
         self._enroll_or_update_node(meta["ak_fpr"], meta["ak_pem"], meta["app_name"])
 
+        # Mirror verify-quote's record shape so /bundle/<heartbeat_id> can
+        # serve raw artifacts. Without client_nonce + raw bytes here,
+        # find_attestation_for_receipt can't link the receipt back to the
+        # quote bytes and the bundle endpoint 404s.
         record = {
             "kind": "heartbeat",
             "app_name": meta["app_name"],
             "received_at": int(time.time()),
             "verdict": verdict,
             "ak_fpr": meta["ak_fpr"],
+            "client_nonce": meta["client_nonce"],
+            "live_pcrs": meta["live_pcrs"],
+            "expected_pcrs": meta["expected_pcrs"],
+            "mismatches": meta["mismatches"],
+            "attest_parsed": attest,
+            "quote_msg_b64": body.get("quote_msg_b64"),
+            "quote_sig_b64": body.get("quote_sig_b64"),
+            "ak_pub_pem": meta["ak_pem"],
+            "ek_cert_der_b64": body.get("ek_cert_der_b64"),
         }
         append_jsonl(ATTESTATIONS_FILE, record)
 
