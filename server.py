@@ -566,7 +566,9 @@ class H(http.server.BaseHTTPRequestHandler):
             self.send_text(404, "app not registered", "text/plain")
             return
 
-        latest = latest_receipt_for_app(app)
+        # Badge reflects the latest *verdict-bearing* receipt (attestation or heartbeat).
+        latest = latest_receipt_for_app(app, kind="heartbeat") or \
+                 latest_receipt_for_app(app, kind="attestation")
         if not latest:
             verdict, color, age = "no-data", "#888", "—"
         else:
